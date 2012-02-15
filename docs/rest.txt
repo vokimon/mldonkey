@@ -1,0 +1,19 @@
+* mldonkey REST attempt
+This branch is an attempt at a json rest interface.
+
+currently you only get a json dump of the downloads and their
+statistics at:
+
+http://localhost:4080/api/json/vd
+
+** tentative plan
+*** iteration 1
+- authenticate using plain http, just as is already done
+- submit a download, mostly like it already works
+- expose the download information over json
+*** iteration 2
+- more primitives
+*** iteration 3
+- rest callbacks, when a commit is done 
+*** iteration future
+also expose XML, or whatever people like to consume these days
