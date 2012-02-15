@@ -37,6 +37,9 @@ open DriverInteractive
 open CommonOptions
 open CommonUserDb
 
+(* open Json_type *)
+
+
 let log_prefix = "[dCon]"
 
 let lprintf_nl fmt =
@@ -985,6 +988,72 @@ let http_handler o t r =
       in
       try
         match r.get_url.Url.short_file with
+          | "api/vd" ->
+            begin
+              clear_page buf;
+              http_add_text_header r CSS;
+              Printf.bprintf buf  "{";              
+
+              let dlkbs =
+                (( (float_of_int !udp_download_rate) +. (float_of_int !control_download_rate)) /. 1024.0) in
+              let ulkbs =
+                (( (float_of_int !udp_upload_rate) +. (float_of_int !control_upload_rate)) /. 1024.0) in
+              (* here there will be json vd dump *)
+              (* speed *)
+              Printf.bprintf buf "{\"dlstat\":{ \"DL\": %.1f (%d|%d) \"UL\": %.1f  (%d|%d) }\n"
+                dlkbs !udp_download_rate !control_download_rate ulkbs !udp_upload_rate !control_upload_rate;
+
+(* downloads *)
+              let mfiles = List2.tail_map file_info !!files in
+              List.iter (fun file ->
+
+                  Printf.bprintf buf  " {\"id\":%-5d   \"state\": %s  \"rate\":%f \"name\":%s   %s/%s }\n" 
+                    (file.file_num) 
+                    (if downloading file then "P" else "R" ) 
+
+                    (file.file_download_rate /. 1024.)
+                    (short_name file)
+                    
+                    (print_human_readable file (file.file_size -- file.file_downloaded)) 
+                    (print_human_readable file file.file_size);
+
+              ) mfiles;
+              Printf.bprintf buf  "}";
+              Printf.bprintf buf "Downloaded %d/%d files " (List.length !!done_files) (List.length !!files);
+            end (* of REST hack *)
+
+          | "api/json/vd" ->
+            begin
+              clear_page buf;
+              http_add_text_header r CSS;
+
+             let mfiles = List2.tail_map file_info !!files in
+             List.iter (fun file ->
+
+               Printf.bprintf buf "%s\n" ( Yojson.Safe.to_string  (`Assoc [
+                 "id", `Int    (file.file_num);
+                 "name", `String (short_name file);
+                 "size",  `Float (Int64.to_float file.file_size);            
+                 "rate", `Float file.file_download_rate
+               ])) ;
+               
+               (* Printf.bprintf buf  " {\"id\":%-5d   \"state\": %s  \"rate\":%f \"name\":%s   %s/%s }\n"  *)
+
+               (*   (if downloading file then "P" else "R" )  *)
+                 
+               (*   (file.file_download_rate /. 1024.) *)
+
+                 
+               (*   (print_human_readable file (file.file_size -- file.file_downloaded))  *)
+               (*   (print_human_readable file file.file_size); *)
+               
+             ) mfiles;
+
+             
+            end (* of REST hack *)
+              
+            
+            
         | "wap.wml" ->
             begin
               clear_page buf;

@@ -93,7 +93,7 @@ SRC_FILETP=src/networks/fileTP
 SUBDIRS=$(EXTLIB) $(CDK) $(BITSTRING) $(LIB) $(RSS) $(XML) $(NET) tools \
    $(COMMON) $(DRIVER) $(MP3) src/config/$(OS_FILES)
 
-INCLUDES += $(foreach file, $(SUBDIRS), -I $(file)) -I +camlp4
+INCLUDES += $(foreach file, $(SUBDIRS), -I $(file)) -I +camlp4 -I +yojson
 
 CFLAGS:=$(CFLAGS) $(CONFIG_INCLUDES) $(GTKCFLAGS) $(GD_CFLAGS)
 
@@ -124,7 +124,7 @@ endif
 
 #######################################################################
 
-LIBS_flags += -ccopt "$(LDFLAGS) $(CPPFLAGS)" -cclib "$(LIBS)"
+LIBS_flags += -ccopt "$(LDFLAGS) -L/usr/lib64/ocaml/yojson $(CPPFLAGS)" -cclib "$(LIBS)" 
 
 ifeq ("$(OS_FILES2)", "mingw")
   LIBS_flags += -cclib "-lws2_32 -lgdi32 -luser32 -ladvapi32 -lwsock32 -limm32 -lshell32 -lole32 resfile.o"
@@ -595,7 +595,7 @@ BITSTRING_CMXA=bitstring.cmxa
 BITSTRING_CMA=bitstring.cma
 endif
 MLNET_SRCS+= $(MAIN_SRCS)
-MLNET_CMXA=extlib.cmxa $(CDK_CMXA) $(BITSTRING_CMXA) magic.cmxa common.cmxa client.cmxa core.cmxa driver.cmxa
+MLNET_CMXA=extlib.cmxa $(CDK_CMXA) $(BITSTRING_CMXA) magic.cmxa common.cmxa client.cmxa core.cmxa driver.cmxa 
 
 TESTS_CMXA=extlib.cmxa $(CDK_CMXA) $(BITSTRING_CMXA) magic.cmxa common.cmxa client.cmxa core.cmxa
 TESTS_SRCS=tools/tests.ml
