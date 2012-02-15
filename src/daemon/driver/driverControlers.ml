@@ -37,9 +37,6 @@ open DriverInteractive
 open CommonOptions
 open CommonUserDb
 
-(* open Json_type *)
-
-
 let log_prefix = "[dCon]"
 
 let lprintf_nl fmt =
@@ -987,6 +984,7 @@ let http_handler o t r =
             user.ui_http_conn <- Some oo; oo
       in
       try
+        match r.get_url.Url.short_file with
           | "api/json/vd" ->
             begin (* REST hack *)
               clear_page buf;
@@ -1000,6 +998,7 @@ let http_handler o t r =
                    "name", `String (short_name file);
                    "size",  `Float (Int64.to_float file.file_size);
                    "downloaded",`Float  (Int64.to_float  file.file_downloaded);
+                   "downloading", `Bool (downloading file) ;
                    "rate", `Float file.file_download_rate
                  ]) mfiles))));
             end (* of REST hack *)
