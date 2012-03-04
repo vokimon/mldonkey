@@ -540,6 +540,7 @@ let max_range_requests = 5
 let reserved () =
   let s = String.make 8 '\x00' in
   s.[7] <- (match !bt_dht with None -> '\x00' | Some _ -> '\x01');
+  s.[5] <- '\x10'; (* TODO bep9, bep10, notify clients about extended*)
   s
 
 (** handshake *)
@@ -968,7 +969,7 @@ and get_from_client sock (c: client) =
   @param msg The message sent by the client
 *)
 and client_to_client c sock msg =
-  if !verbose_msg_clients then begin
+  (* if !verbose_msg_clients then begin *)
       let (ip,port) = (TcpBufferedSocket.peer_addr sock) in
       let (timeout, next) = get_rtimeout sock in
       lprintf_nl "CLIENT %d(%s:%d): (%d, %d,%d) Received %s"
@@ -977,7 +978,7 @@ and client_to_client c sock msg =
       (int_of_float timeout)
       (int_of_float next)
       (TcpMessages.to_string msg);
-    end;
+    (* end; *)
 
   let file = c.client_file in
 
@@ -1247,6 +1248,18 @@ and client_to_client c sock msg =
           if !verbose_msg_clients then
             lprintf_file_nl (as_file file) "Error: received cancel request but client has no slot"
 
+    | Extended (extmsg, payload) ->
+      
+      (* extmsg: 0 handshake, N other message previously declared in handshake*)
+      begin
+      lprintf_file_nl (as_file file) "Got extended msg: %d %s" extmsg payload;
+      match extmsg with
+        | 0x0 ->
+          lprintf_file_nl (as_file file) "Got extended handshake "
+        | _ ->
+          lprintf_file_nl (as_file file) "Got extended non-handshake message "
+      end;
+
     | DHT_Port port ->
         match !bt_dht with
         | None ->
@@ -1260,6 +1273,7 @@ and client_to_client c sock msg =
           | Some (id,addr) ->
             BT_DHT.update dht Kademlia.Good id addr
           end
+
 
   with e ->
       lprintf_file_nl (as_file file) "Error %s while handling MESSAGE: %s" (Printexc2.to_string e) (TcpMessages.to_string msg)

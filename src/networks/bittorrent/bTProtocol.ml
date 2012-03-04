@@ -217,6 +217,7 @@ With payload:
     * 9 - DHT port announcement
           int16: UDP port
 
+    * 20 - extended TODO
 Choke/unchoke every 10 seconds
 *)
 
@@ -251,6 +252,8 @@ and gconn = {
     mutable gconn_close_on_write : bool;
   }
 
+
+    
 module TcpMessages = struct
 
     type msg =
@@ -266,9 +269,11 @@ module TcpMessages = struct
     | Ping
     | PeerID of string
     | DHT_Port of int
-
+    | Extended of int * string
+        
     let to_string msg =
-      match msg with
+      match
+        msg with
       | Choke -> "Choke"
       | Unchoke -> "Unchoke"
       | Interested -> "Interested"
@@ -284,6 +289,7 @@ module TcpMessages = struct
       | Ping -> "Ping"
       | PeerID s ->  Printf.sprintf  "PeerID [%s]" (String.escaped s)
       | DHT_Port n -> Printf.sprintf "DHT_Port %d" n
+      | Extended (n, s) -> Printf.sprintf  "Extended [%d %s]" n (String.escaped s)
 
     let parsing opcode m =
         match opcode with
@@ -297,6 +303,7 @@ module TcpMessages = struct
         | 7 -> Piece (get_int m 0, get_uint64_32 m 4, m, 8, String.length m - 8)
         | 8 -> Cancel (get_int m 0, get_uint64_32 m 4, get_uint64_32 m 8)
         | 9 -> DHT_Port (get_int16 m 0)
+        | 20 -> Extended (get_int8 m 0, String.sub m 1 (String.length m))
         | -1 -> PeerID m
         | _ -> raise Not_found
 
@@ -325,6 +332,7 @@ module TcpMessages = struct
         | PeerID _ -> ()
         | Ping -> ()
         | DHT_Port n -> buf_int8 buf 9; buf_int16 buf n
+        | Extended (n, string) ->  Buffer.add_string buf string
       end;
       let s = Buffer.contents buf in
       str_int s 0 (String.length s - 4);
