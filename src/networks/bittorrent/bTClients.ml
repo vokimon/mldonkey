@@ -1278,6 +1278,14 @@ and client_to_client c sock msg =
                       | _ -> () ;
                   ) list;
               |_ -> () ;
+                (* okay so now we now what to ask for, so ask for metadata now
+                   since metadata can be larger than 16k which is the limit, the transfer needs to be chunked, so
+                   it is not really right to make the query here. but its a start.
+                   also im just asking for piece 0
+                *)
+                let module B = Bencode in
+                let msg = (B.encode (B.Dictionary ["msg_type", B.Int 0L; "piece", B.Int  0L; ])) in
+                send_client c (Extended (Int64.to_int c.client_ut_metadata_msg, msg));
           end;
         | _ ->
           if extmsg == Int64.to_int c.client_ut_metadata_msg then
