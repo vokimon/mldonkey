@@ -332,7 +332,7 @@ module TcpMessages = struct
         | PeerID _ -> ()
         | Ping -> ()
         | DHT_Port n -> buf_int8 buf 9; buf_int16 buf n
-        | Extended (n, string) ->  Buffer.add_string buf string
+        | Extended (n, string) -> buf_int8 buf 20; buf_int8 buf n; Buffer.add_string buf string
       end;
       let s = Buffer.contents buf in
       str_int s 0 (String.length s - 4);
