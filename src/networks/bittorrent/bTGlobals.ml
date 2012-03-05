@@ -866,6 +866,8 @@ let new_client file peer_id kind cc =
           client_cache_extension = false;
           client_fast_extension = false;
           client_utorrent_extension = false;
+          client_ut_metadata_msg = -1L;
+          client_ut_metadata_size = -1L;          
           client_azureus_messaging_protocol = false;
         } and impl = {
           dummy_client_impl with

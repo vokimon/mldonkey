@@ -64,7 +64,7 @@ open BTComplexOptions
 open BTChooser
 open BTStats
 open TcpMessages
-
+open Bencode
 module VB = VerificationBitmap
 
 let http_ok = "HTTP 200 OK"
@@ -1252,12 +1252,38 @@ and client_to_client c sock msg =
       
       (* extmsg: 0 handshake, N other message previously declared in handshake*)
       begin
+
       lprintf_file_nl (as_file file) "Got extended msg: %d %s" extmsg payload;
       match extmsg with
         | 0x0 ->
-          lprintf_file_nl (as_file file) "Got extended handshake "
+          lprintf_file_nl (as_file file) "Got extended handshake ";
+          let dict = Bencode.decode payload in begin
+            match dict with
+                Dictionary list ->
+                  List.iter (fun (key,value) ->
+                    match key, value with
+                        "metadata_size", Int n ->
+                          lprintf_file_nl (as_file file) "Got metadata size %Ld" n;
+                          c.client_ut_metadata_size <- n;
+                      | "m", Dictionary  mdict ->
+                        lprintf_file_nl (as_file file) "Got meta dict ";
+                        List.iter (fun (key,value) ->
+                          match key, value with
+                              "ut_metadata", Int n ->
+                                lprintf_file_nl (as_file file) "ut_metadata is %Ld " n;
+                                c.client_ut_metadata_msg <- n;
+                            | _ -> ();
+                        ) mdict;
+
+                      | _ -> () ;
+                  ) list;
+              |_ -> () ;
+          end;
         | _ ->
-          lprintf_file_nl (as_file file) "Got extended non-handshake message "
+          if extmsg == Int64.to_int c.client_ut_metadata_msg then
+            lprintf_file_nl (as_file file) "Got extended ut_metadata message "
+          else
+            lprintf_file_nl (as_file file) "Got extended other msg ";
       end;
 
     | DHT_Port port ->

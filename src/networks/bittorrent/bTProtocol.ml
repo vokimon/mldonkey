@@ -221,7 +221,7 @@ With payload:
 Choke/unchoke every 10 seconds
 *)
 
-
+open String
 open BasicSocket
 open CommonTypes
 open Printf2
@@ -303,7 +303,7 @@ module TcpMessages = struct
         | 7 -> Piece (get_int m 0, get_uint64_32 m 4, m, 8, String.length m - 8)
         | 8 -> Cancel (get_int m 0, get_uint64_32 m 4, get_uint64_32 m 8)
         | 9 -> DHT_Port (get_int16 m 0)
-        | 20 -> Extended (get_int8 m 0, String.sub m 1 (String.length m))
+        | 20 -> Extended (get_int8 m 0, (String.sub m 1 ((String.length m) - 1)))
         | -1 -> PeerID m
         | _ -> raise Not_found
 

@@ -287,6 +287,9 @@ type client = {
     mutable client_cache_extension : bool;
     mutable client_fast_extension : bool;
     mutable client_utorrent_extension : bool;
+    mutable client_ut_metadata_msg : int64;
+    mutable client_ut_metadata_size : int64;
+    
     mutable client_azureus_messaging_protocol : bool;
 
   }
