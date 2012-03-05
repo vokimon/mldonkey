@@ -1252,6 +1252,17 @@ and client_to_client c sock msg =
       
       (* extmsg: 0 handshake, N other message previously declared in handshake*)
       begin
+        (* since we got at least one extended handshake from the peer, it should be okay to
+           send a handshake back now. we need to send it so the remote client knows how
+           to send us messages back.
+           this should of course be moved but I dont know where yet.
+           also we shouldnt send more than one handshake of course...
+        *)
+        let module B = Bencode in
+        let msg = (B.encode (B.Dictionary ["m", (B.Dictionary ["ut_metadata", B.Int 1L]) ])) in begin
+          lprintf_file_nl (as_file file) "send extended  handshake msg %s" msg;
+          send_client c (Extended (Int64.to_int 0L, msg));
+        end;
 
       lprintf_file_nl (as_file file) "Got extended msg: %d %s" extmsg payload;
       match extmsg with
@@ -1291,10 +1302,18 @@ and client_to_client c sock msg =
 
               |_ -> () ;
           end;
-        | _ ->
-          if extmsg == Int64.to_int c.client_ut_metadata_msg then
+        | 0x01 -> (* ut_metadata is 1 because we asked it to be in the handshake
+                     the msg_type is probably
+                       1 for data,
+                       but could be 0 for request(unlikely since we didnt advertise we had the meta)
+                       2 for reject, also unlikely since peers shouldnt advertise if they dont have(but will need handling in the end)
+
+                     {'msg_type': 1, 'piece': 0, 'total_size': 3425}
+                     after the dict comes the actual piece
+                     
+                  *)
             lprintf_file_nl (as_file file) "Got extended ut_metadata message "
-          else
+        | _ ->
             lprintf_file_nl (as_file file) "Got extended other msg ";
       end;
 
