@@ -1265,11 +1265,11 @@ let commands =
             torrent_name_utf8 = hashstr;
             torrent_comment = "";
             torrent_pieces = Array.of_list [];  
-            torrent_piece_size = 0L;  
+            torrent_piece_size = 10000000L;  
             torrent_files = []; 
-            torrent_length = 0L;
+            torrent_length = 100000000L;
             torrent_created_by = ""; 
-            torrent_creation_date = 0L;
+            torrent_creation_date = 1000000L;
             torrent_modified_by = ""; 
             torrent_encoding = ""; 
             torrent_private = false; 
@@ -1282,7 +1282,7 @@ let commands =
             (*   | [] -> ""); *)
             torrent_announce_list = [];
            }  in
-        let hash = (Sha1.direct_of_string  hashstr) in
+        let hash = (Sha1.of_hexa  hashstr) in
         new_download hash torrent "" o.conn_user.ui_user o.conn_user.ui_user.user_default_group;
 
       end;
