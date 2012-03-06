@@ -1251,6 +1251,46 @@ let commands =
       _s ""
      ),  "<url|file> :\t\t\tstart BT download";
 
+    "startbthash", "Network/Bittorrent", Arg_one (fun hashstr o ->
+      
+      begin
+
+        let torrent = (* BTTorrent.make_torrent "" "" "" false *)
+
+          (* BTTorrent.decode_torrent "" *)
+
+{
+  torrent_name = hashstr;
+            torrent_filename = hashstr;
+            torrent_name_utf8 = hashstr;
+            torrent_comment = "";
+            torrent_pieces = Array.of_list [];  
+            torrent_piece_size = 0L;  
+            torrent_files = []; 
+            torrent_length = 0L;
+            torrent_created_by = ""; 
+            torrent_creation_date = 0L;
+            torrent_modified_by = ""; 
+            torrent_encoding = ""; 
+            torrent_private = false; 
+(*
+            torrent_nodes = file_nodes;
+*)
+             torrent_announce = "";
+            (* (match file_trackers with *)
+            (*   | h::q -> h *)
+            (*   | [] -> ""); *)
+            torrent_announce_list = [];
+           }  in
+        let hash = (Sha1.direct_of_string  hashstr) in
+        new_download hash torrent "" o.conn_user.ui_user o.conn_user.ui_user.user_default_group;
+
+      end;
+      _s ""
+     ),  "<hash> :\t\t\tstart BT download DEBUG will go away";
+
+
+    
     "stop_all_bt", "Network/Bittorrent", Arg_none (fun o ->
       List.iter (fun file -> BTClients.file_stop file ) !current_files;
       let buf = o.conn_buf in
