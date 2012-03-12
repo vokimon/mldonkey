@@ -610,11 +610,22 @@ let parse_reserved rbits c =
 
 let send_extended_handshake c file =
   let module B = Bencode in
-  let msg = (B.encode (B.Dictionary ["e",B.Int 0L; "m", (B.Dictionary ["ut_metadata", B.Int 2L]) ])) in begin
+  let msg = (B.encode (B.Dictionary [(* "e",B.Int 0L; *)
+                                     "m", (B.Dictionary ["ut_metadata", B.Int 2L]);
+                                     "metadata_size", B.Int (-1L)])) in begin
     lprintf_file_nl (as_file file) "send extended handshake msg %s" msg;
     send_client c (Extended (Int64.to_int 0L, msg));
   end
 
+let send_extended_piece_request c piece file =                                                                     
+  let module B = Bencode in
+  let msg = (B.encode (B.Dictionary ["msg_type", B.Int 0L;
+                                     "piece", B.Int piece; ])) in begin
+    lprintf_file_nl (as_file file) "send extended request for piece %Ld %s" piece msg;
+    send_client c (Extended (Int64.to_int c.client_ut_metadata_msg, msg));
+  end
+
+                                                                     
 let show_client c =
   let (ip,port) = c.client_host in
   Printf.sprintf "%s:%d %S" (Ip.to_string ip) port (brand_to_string c.client_brand)
@@ -1301,12 +1312,7 @@ and client_to_client c sock msg =
                     
 
                     send_extended_handshake c file;
-                    let module B = Bencode in
-                    let msg = (B.encode (B.Dictionary ["msg_type", B.Int 0L;
-                                                       "piece", B.Int c.client_file.file_metadata_piece; ])) in begin
-                      lprintf_file_nl (as_file file) "send extended  request for piece %Ld %s" c.client_file.file_metadata_piece msg;
-                      send_client c (Extended (Int64.to_int c.client_ut_metadata_msg, msg));
-                    end;
+                    send_extended_piece_request c c.client_file.file_metadata_piece file;
                 |_ -> () ;
             end;
           | 0x02 -> (* ut_metadata is 1 because we asked it to be 1 in the handshake (try 2 for a while)
@@ -1344,11 +1350,7 @@ and client_to_client c sock msg =
                         (* now ask for the next metadata piece, if any *)
                         let module B = Bencode in
                         let nextpiece = (Int64.succ c.client_file.file_metadata_piece) in
-                        let msg = (B.encode (B.Dictionary ["msg_type", B.Int 0L;
-                                                           "piece", B.Int nextpiece; ])) in begin
-                          lprintf_file_nl (as_file file) "send extended  request for piece %Ld msg %s" nextpiece msg;
-                          send_client c (Extended (Int64.to_int c.client_ut_metadata_msg, msg));
-                        end;
+                        send_extended_piece_request c nextpiece file;
                     |_ ->
                       lprintf_file_nl (as_file file) "unmatched extended subtype" ;
             end;
