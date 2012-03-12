@@ -302,6 +302,8 @@ let new_file file_id t torrent_diskname file_temp file_state user group =
           file_session_uploaded = Int64.zero;
           file_session_downloaded = Int64.zero;
           file_last_dht_announce = 0;
+          file_metadata_size = 0L;
+          file_metadata_piece = 0L;
           file_private = t.torrent_private;
         } and file_impl =  {
           (dummy_file_impl ()) with
@@ -867,7 +869,6 @@ let new_client file peer_id kind cc =
           client_fast_extension = false;
           client_utorrent_extension = false;
           client_ut_metadata_msg = -1L;
-          client_ut_metadata_size = -1L;          
           client_azureus_messaging_protocol = false;
         } and impl = {
           dummy_client_impl with

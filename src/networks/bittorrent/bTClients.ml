@@ -1258,62 +1258,99 @@ and client_to_client c sock msg =
            this should of course be moved but I dont know where yet.
            also we shouldnt send more than one handshake of course...
         *)
-        let module B = Bencode in
-        let msg = (B.encode (B.Dictionary ["m", (B.Dictionary ["ut_metadata", B.Int 1L]) ])) in begin
-          lprintf_file_nl (as_file file) "send extended  handshake msg %s" msg;
-          send_client c (Extended (Int64.to_int 0L, msg));
-        end;
+        lprintf_file_nl (as_file file) "Got extended msg: %d %s" extmsg payload;
 
-      lprintf_file_nl (as_file file) "Got extended msg: %d %s" extmsg payload;
-      match extmsg with
-        | 0x0 ->
-          lprintf_file_nl (as_file file) "Got extended handshake ";
-          let dict = Bencode.decode payload in begin
-            match dict with
-                Dictionary list ->
-                  List.iter (fun (key,value) ->
-                    match key, value with
-                        "metadata_size", Int n ->
-                          lprintf_file_nl (as_file file) "Got metadata size %Ld" n;
-                          c.client_ut_metadata_size <- n;
-                      | "m", Dictionary  mdict ->
-                        lprintf_file_nl (as_file file) "Got meta dict ";
-                        List.iter (fun (key,value) ->
-                          match key, value with
-                              "ut_metadata", Int n ->
-                                lprintf_file_nl (as_file file) "ut_metadata is %Ld " n;
-                                c.client_ut_metadata_msg <- n;
-                            | _ -> ();
-                        ) mdict;
+        match extmsg with
+          | 0x0 ->
+            lprintf_file_nl (as_file file) "Got extended handshake ";
+            let dict = Bencode.decode payload in begin
+              match dict with
+                  Dictionary list ->
+                    List.iter (fun (key,value) ->
+                      match key, value with
+                          "metadata_size", Int n ->
+                            lprintf_file_nl (as_file file) "Got metadata size %Ld" n;
+                            c.client_file.file_metadata_size <- n;
+                        | "m", Dictionary  mdict ->
+                          lprintf_file_nl (as_file file) "Got meta dict ";
+                          List.iter (fun (key,value) ->
+                            match key, value with
+                                "ut_metadata", Int n ->
+                                  lprintf_file_nl (as_file file) "ut_metadata is %Ld " n;
+                                  c.client_ut_metadata_msg <- n;
+                              | _ -> ();
+                          ) mdict;
 
-                      | _ -> () ;
-                  ) list;
+                        | _ -> () ;
+                    ) list;
                 (* okay so now we now what to ask for, so ask for metadata now
                    since metadata can be larger than 16k which is the limit, the transfer needs to be chunked, so
                    it is not really right to make the query here. but its a start.
                    also im just asking for piece 0.
                    (we should also check that we actually got the metadata info before proceeding)
                 *)
-                let module B = Bencode in
-                let msg = (B.encode (B.Dictionary ["msg_type", B.Int 0L; "piece", B.Int  0L; ])) in begin
-                  lprintf_file_nl (as_file file) "send extended  msg %s" msg;
-                  send_client c (Extended (Int64.to_int c.client_ut_metadata_msg, msg));
-                end;
+                    
 
-              |_ -> () ;
-          end;
-        | 0x01 -> (* ut_metadata is 1 because we asked it to be in the handshake
-                     the msg_type is probably
+                    let module B = Bencode in
+                    let msg = (B.encode (B.Dictionary ["e",B.Int 0L; "m", (B.Dictionary ["ut_metadata", B.Int 1L]) ])) in begin
+                      lprintf_file_nl (as_file file) "send extended handshake msg %s" msg;
+                      send_client c (Extended (Int64.to_int 0L, msg));
+                    end;
+
+
+                    let module B = Bencode in
+                    let msg = (B.encode (B.Dictionary ["msg_type", B.Int 0L;
+                                                       "piece", B.Int c.client_file.file_metadata_piece; ])) in begin
+                      lprintf_file_nl (as_file file) "send extended  request for piece %Ld %s" c.client_file.file_metadata_piece msg;
+                      send_client c (Extended (Int64.to_int c.client_ut_metadata_msg, msg));
+                    end;
+                |_ -> () ;
+            end;
+          | 0x01 -> (* ut_metadata is 1 because we asked it to be 1 in the handshake
+                       the msg_type is probably
                        1 for data,
                        but could be 0 for request(unlikely since we didnt advertise we had the meta)
                        2 for reject, also unlikely since peers shouldnt advertise if they dont have(but will need handling in the end)
 
-                     {'msg_type': 1, 'piece': 0, 'total_size': 3425}
-                     after the dict comes the actual piece
-                     
-                  *)
-            lprintf_file_nl (as_file file) "Got extended ut_metadata message "
-        | _ ->
+                       {'msg_type': 1, 'piece': 0, 'total_size': 3425}
+                       after the dict comes the actual piece
+                       
+                    *)
+            lprintf_file_nl (as_file file) "Got extended ut_metadata message ";
+            let dict = Bencode.decode payload in
+            let msgtype = ref 0L in begin            
+              match dict with
+                  Dictionary list ->
+                    List.iter (fun (key,value) ->
+                      match key, value with
+                          "msg_type", Int n ->
+                            lprintf_file_nl (as_file file) "msg_type %Ld" n;
+                            msgtype := n;
+                        | "piece", Int n ->
+                          lprintf_file_nl (as_file file) "piece %Ld" n;
+                          c.client_file.file_metadata_piece <- n;
+                      (* store the metadata piece *)
+                        | "total_size", Int n ->
+                          lprintf_file_nl (as_file file) "total_size %Ld" n; (* should always be the same i suppose *)
+                        |_ -> () ;
+                    ) list;
+                |_ -> () ;
+
+                  match !msgtype with
+                      1L ->
+                        (* now ask for the next metadata piece, if any *)
+                        let module B = Bencode in
+                        let nextpiece = (Int64.succ c.client_file.file_metadata_piece) in
+                        let msg = (B.encode (B.Dictionary ["msg_type", B.Int 0L;
+                                                           "piece", B.Int nextpiece; ])) in begin
+                          lprintf_file_nl (as_file file) "send extended  request for piece %Ld msg %s" nextpiece msg;
+                          send_client c (Extended (Int64.to_int c.client_ut_metadata_msg, msg));
+                        end;
+                    |_ -> () ;
+            end;
+
+            
+          | _ ->
             lprintf_file_nl (as_file file) "Got extended other msg ";
       end;
 
