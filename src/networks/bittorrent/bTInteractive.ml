@@ -1257,10 +1257,10 @@ let commands =
 
         let torrent = (* BTTorrent.make_torrent "" "" "" false *)
 
-          (* BTTorrent.decode_torrent "" *)
+(* BTTorrent.decode_torrent "" *)
 
-{
-  torrent_name = hashstr;
+          {
+            torrent_name = hashstr;
             torrent_filename = hashstr;
             torrent_name_utf8 = hashstr;
             torrent_comment = "";
@@ -1273,21 +1273,21 @@ let commands =
             torrent_modified_by = ""; 
             torrent_encoding = ""; 
             torrent_private = false; 
-(*
-            torrent_nodes = file_nodes;
-*)
-             torrent_announce = "";
+             (*
+               torrent_nodes = file_nodes;
+             *)
+            torrent_announce = "";
             (* (match file_trackers with *)
             (*   | h::q -> h *)
             (*   | [] -> ""); *)
             torrent_announce_list = [];
-           }  in
+          }  in
         let hash = (Sha1.of_hexa  hashstr) in
         new_download hash torrent "" o.conn_user.ui_user o.conn_user.ui_user.user_default_group;
 
       end;
       _s ""
-     ),  "<hash> :\t\t\tstart BT download DEBUG will go away";
+    ),  "<hash> :\t\t\tstart BT download DEBUG will go away";
 
 
     

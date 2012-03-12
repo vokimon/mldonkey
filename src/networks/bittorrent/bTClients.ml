@@ -608,6 +608,13 @@ let parse_reserved rbits c =
 
   c.client_azureus_messaging_protocol <- has_bit 0 0x80
 
+let send_extended_handshake c file =
+  let module B = Bencode in
+  let msg = (B.encode (B.Dictionary ["e",B.Int 0L; "m", (B.Dictionary ["ut_metadata", B.Int 2L]) ])) in begin
+    lprintf_file_nl (as_file file) "send extended handshake msg %s" msg;
+    send_client c (Extended (Int64.to_int 0L, msg));
+  end
+
 let show_client c =
   let (ip,port) = c.client_host in
   Printf.sprintf "%s:%d %S" (Ip.to_string ip) port (brand_to_string c.client_brand)
@@ -706,6 +713,8 @@ let rec client_parse_header counter cc init_sent gconn sock
       begin
         c.client_incoming <- true;
         send_init !!client_uid file_id sock;
+
+        send_extended_handshake c file;
       end;
     connection_ok c.client_connection_control;
     if !verbose_msg_clients then
@@ -1283,21 +1292,15 @@ and client_to_client c sock msg =
 
                         | _ -> () ;
                     ) list;
-                (* okay so now we now what to ask for, so ask for metadata now
-                   since metadata can be larger than 16k which is the limit, the transfer needs to be chunked, so
-                   it is not really right to make the query here. but its a start.
-                   also im just asking for piece 0.
-                   (we should also check that we actually got the metadata info before proceeding)
-                *)
+                    (* okay so now we now what to ask for, so ask for metadata now
+                       since metadata can be larger than 16k which is the limit, the transfer needs to be chunked, so
+                       it is not really right to make the query here. but its a start.
+                       also im just asking for piece 0.
+                       (we should also check that we actually got the metadata info before proceeding)
+                    *)
                     
 
-                    let module B = Bencode in
-                    let msg = (B.encode (B.Dictionary ["e",B.Int 0L; "m", (B.Dictionary ["ut_metadata", B.Int 1L]) ])) in begin
-                      lprintf_file_nl (as_file file) "send extended handshake msg %s" msg;
-                      send_client c (Extended (Int64.to_int 0L, msg));
-                    end;
-
-
+                    send_extended_handshake c file;
                     let module B = Bencode in
                     let msg = (B.encode (B.Dictionary ["msg_type", B.Int 0L;
                                                        "piece", B.Int c.client_file.file_metadata_piece; ])) in begin
@@ -1306,7 +1309,7 @@ and client_to_client c sock msg =
                     end;
                 |_ -> () ;
             end;
-          | 0x01 -> (* ut_metadata is 1 because we asked it to be 1 in the handshake
+          | 0x02 -> (* ut_metadata is 1 because we asked it to be 1 in the handshake (try 2 for a while)
                        the msg_type is probably
                        1 for data,
                        but could be 0 for request(unlikely since we didnt advertise we had the meta)
@@ -1329,7 +1332,7 @@ and client_to_client c sock msg =
                         | "piece", Int n ->
                           lprintf_file_nl (as_file file) "piece %Ld" n;
                           c.client_file.file_metadata_piece <- n;
-                      (* store the metadata piece *)
+                        (* store the metadata piece *)
                         | "total_size", Int n ->
                           lprintf_file_nl (as_file file) "total_size %Ld" n; (* should always be the same i suppose *)
                         |_ -> () ;
@@ -1346,7 +1349,8 @@ and client_to_client c sock msg =
                           lprintf_file_nl (as_file file) "send extended  request for piece %Ld msg %s" nextpiece msg;
                           send_client c (Extended (Int64.to_int c.client_ut_metadata_msg, msg));
                         end;
-                    |_ -> () ;
+                    |_ ->
+                      lprintf_file_nl (as_file file) "unmatched extended subtype" ;
             end;
 
             
@@ -1440,6 +1444,8 @@ let connect_client c =
                     lprintf_file_nl (as_file file) "READY TO DOWNLOAD FILE";
 
                   send_init !!client_uid file.file_id sock;
+                  send_extended_handshake c file;
+
 (* Fabrice: Initialize the client bitmap and uploader fields to <> None *)
                   update_client_bitmap c;
 (*              (try get_from_client sock c with _ -> ());*)
