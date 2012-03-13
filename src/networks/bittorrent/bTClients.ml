@@ -611,8 +611,8 @@ let parse_reserved rbits c =
 let send_extended_handshake c file =
   let module B = Bencode in
   let msg = (B.encode (B.Dictionary [(* "e",B.Int 0L; *)
-                                     "m", (B.Dictionary ["ut_metadata", B.Int 2L]);
-                                     "metadata_size", B.Int (-1L)])) in begin
+                                     "m", (B.Dictionary ["ut_metadata", B.Int 1L]);
+                                     (* "metadata_size", B.Int (-1L) *)])) in begin
     lprintf_file_nl (as_file file) "send extended handshake msg %s" msg;
     send_client c (Extended (Int64.to_int 0L, msg));
   end
@@ -621,7 +621,7 @@ let send_extended_piece_request c piece file =
   let module B = Bencode in
   let msg = (B.encode (B.Dictionary ["msg_type", B.Int 0L;
                                      "piece", B.Int piece; ])) in begin
-    lprintf_file_nl (as_file file) "send extended request for piece %Ld %s" piece msg;
+    lprintf_file_nl (as_file file) "send extended request for piece:%Ld msgid:%Ld msg:%s" piece c.client_ut_metadata_msg msg;
     send_client c (Extended (Int64.to_int c.client_ut_metadata_msg, msg));
   end
 
@@ -1281,7 +1281,7 @@ and client_to_client c sock msg =
         lprintf_file_nl (as_file file) "Got extended msg: %d %s" extmsg payload;
 
         match extmsg with
-          | 0x0 ->
+            0x0 ->
             lprintf_file_nl (as_file file) "Got extended handshake ";
             let dict = Bencode.decode payload in begin
               match dict with
@@ -1315,7 +1315,7 @@ and client_to_client c sock msg =
                     send_extended_piece_request c c.client_file.file_metadata_piece file;
                 |_ -> () ;
             end;
-          | 0x02 -> (* ut_metadata is 1 because we asked it to be 1 in the handshake (try 2 for a while)
+          | 0x01 -> (* ut_metadata is 1 because we asked it to be 1 in the handshake (try 2 for a while)
                        the msg_type is probably
                        1 for data,
                        but could be 0 for request(unlikely since we didnt advertise we had the meta)
