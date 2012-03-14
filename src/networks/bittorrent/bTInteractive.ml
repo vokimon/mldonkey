@@ -1283,7 +1283,8 @@ let commands =
             torrent_announce_list = [];
           }  in
         let hash = (Sha1.of_hexa  hashstr) in
-        new_download hash torrent "" o.conn_user.ui_user o.conn_user.ui_user.user_default_group;
+        let file = new_download hash torrent "" o.conn_user.ui_user o.conn_user.ui_user.user_default_group in
+        file.file_metadata_downloading <- true;
 
       end;
       _s ""

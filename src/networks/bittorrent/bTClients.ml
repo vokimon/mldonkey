@@ -570,6 +570,9 @@ let send_interested c =
 *)
 
 let send_bitfield c =
+  if c.client_file.file_metadata_downloading then
+    lprintf_nl "dont send bitmap, we are in metadata state"
+  else
   send_client c (BitField
       (
       match c.client_file.file_swarmer with
@@ -619,7 +622,7 @@ let send_extended_handshake c file =
 
 let send_extended_piece_request c piece file =                                                                     
   let module B = Bencode in
-  let msg = (B.encode (B.Dictionary ["msg_type", B.Int 0L;
+  let msg = (B.encode (B.Dictionary ["msg_type", B.Int 0L; (* 0 is request subtype*)
                                      "piece", B.Int piece; ])) in begin
     lprintf_file_nl (as_file file) "send extended request for piece:%Ld msgid:%Ld msg:%s" piece c.client_ut_metadata_msg msg;
     send_client c (Extended (Int64.to_int c.client_ut_metadata_msg, msg));
@@ -1146,6 +1149,9 @@ and client_to_client c sock msg =
 
     | Have n ->
         (* A client can send a "Have" without sending a Bitfield *)
+        if c.client_file.file_metadata_downloading then
+          lprintf_nl "ignoring Have message, we are in metadata state"
+        else
         begin
           match c.client_file.file_swarmer with
             None -> ()

@@ -341,6 +341,7 @@ and file = {
 
     mutable file_metadata_size : int64;
     mutable file_metadata_piece : int64;
+    mutable file_metadata_downloading : bool;
     
     file_private : bool;
   }
