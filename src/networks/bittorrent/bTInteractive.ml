@@ -837,7 +837,8 @@ let share_files _ =
   List.iter (fun file ->
       (* if !verbose_share then lprintf_nl "Checking torrent share for %s" file.file_torrent_diskname; *)
       if not (Sys.file_exists file.file_torrent_diskname) &&
-        file_state file = FileShared then
+        file_state file = FileShared &&
+        not (file.file_metadata_downloading ) then
         begin
           if !verbose_share then lprintf_nl "Removing torrent share for %s" file.file_torrent_diskname;
           BTClients.file_stop file;

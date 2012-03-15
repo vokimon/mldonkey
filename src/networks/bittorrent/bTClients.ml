@@ -1103,6 +1103,11 @@ and client_to_client c sock msg =
 
     | BitField p ->
         (*A bitfield is a summary of what a client have*)
+      lprintf_file_nl (as_file file) "Bitfield message,  metadata state %B" c.client_file.file_metadata_downloading ;
+      if c.client_file.file_metadata_downloading then
+        lprintf_file_nl (as_file file) "ignoring Bitfield message, we are in metadata state"
+      else
+
         begin
           match c.client_file.file_swarmer with
             None -> ()
@@ -1150,7 +1155,7 @@ and client_to_client c sock msg =
     | Have n ->
         (* A client can send a "Have" without sending a Bitfield *)
         if c.client_file.file_metadata_downloading then
-          lprintf_nl "ignoring Have message, we are in metadata state"
+          lprintf_file_nl (as_file file)  "ignoring Have message, we are in metadata state"
         else
         begin
           match c.client_file.file_swarmer with

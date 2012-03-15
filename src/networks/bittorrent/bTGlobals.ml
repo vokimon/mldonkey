@@ -304,7 +304,7 @@ let new_file file_id t torrent_diskname file_temp file_state user group =
           file_last_dht_announce = 0;
           file_metadata_size = 0L;
           file_metadata_piece = 0L;
-          file_metadata_downloading = false;
+          file_metadata_downloading = true ;
           file_private = t.torrent_private;
         } and file_impl =  {
           (dummy_file_impl ()) with
