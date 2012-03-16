@@ -65,6 +65,7 @@ open BTChooser
 open BTStats
 open TcpMessages
 open Bencode
+open Str
 module VB = VerificationBitmap
 
 let http_ok = "HTTP 200 OK"
@@ -1338,32 +1339,67 @@ and client_to_client c sock msg =
                     *)
             lprintf_file_nl (as_file file) "Got extended ut_metadata message ";
             let dict = Bencode.decode payload in
-            let msgtype = ref 0L in begin            
-              match dict with
-                  Dictionary list ->
-                    List.iter (fun (key,value) ->
-                      match key, value with
-                          "msg_type", Int n ->
-                            lprintf_file_nl (as_file file) "msg_type %Ld" n;
-                            msgtype := n;
-                        | "piece", Int n ->
-                          lprintf_file_nl (as_file file) "piece %Ld" n;
-                          c.client_file.file_metadata_piece <- n;
-                        (* store the metadata piece *)
-                        | "total_size", Int n ->
-                          lprintf_file_nl (as_file file) "total_size %Ld" n; (* should always be the same i suppose *)
-                        |_ -> () ;
-                    ) list;
-                |_ -> () ;
-
-                  match !msgtype with
-                      1L ->
-                        (* now ask for the next metadata piece, if any *)
-                        let module B = Bencode in
-                        let nextpiece = (Int64.succ c.client_file.file_metadata_piece) in
+            let msgtype = ref 0L in begin
+              begin
+                match dict with
+                    Dictionary list ->
+                      List.iter (fun (key,value) ->
+                        match key, value with
+                            "msg_type", Int n ->
+                              lprintf_file_nl (as_file file) "msg_type %Ld" n;
+                              msgtype := n;
+                          | "piece", Int n ->
+                            lprintf_file_nl (as_file file) "piece %Ld" n;
+                            c.client_file.file_metadata_piece <- n;
+                          | "total_size", Int n ->
+                            lprintf_file_nl (as_file file) "total_size %Ld" n; (* should always be the same as received in the initial handshake i suppose *)
+                          |_ -> () ;
+                      ) list;
+                  |_ -> () ;
+              end;
+              match !msgtype with
+                  1L ->
+                    let last_piece_index = (Int64.div c.client_file.file_metadata_size 16384L) in
+                    lprintf_file_nl (as_file file) "handling metadata piece %Ld of %Ld"
+                      c.client_file.file_metadata_piece
+                      last_piece_index;
+                        (* store the metadata piece in memory *)
+                    c.client_file.file_metadata_chunks.(1 + (Int64.to_int c.client_file.file_metadata_piece)) <- payload;
+                        (* possibly write metadata to disk *)
+                    if c.client_file.file_metadata_piece >=
+                      (Int64.div c.client_file.file_metadata_size 16384L) then begin
+                        lprintf_file_nl (as_file file) "this was the last piece ";
+                            (* here we should simply delete the current download, and wait for mld to pick up the new torrent file *)
+                            (* the entire payload is currently in the array, TODO *)
+                        let fd = Unix32.create_rw  (Printf.sprintf "/tmp/BT-%s.torrent"
+                                                      (Sha1.to_string c.client_file.file_id))  in
+                        let fileindex = ref 0L in
+                        begin
+                          c.client_file.file_metadata_chunks.(0) <- "eed4:info";
+                          c.client_file.file_metadata_chunks.(2 + Int64.to_int last_piece_index) <- "eee";
+                          Array.iteri (fun index chunk ->
+                            let metaindex = (2 + (Str.search_forward  (Str.regexp_string "ee") chunk 0 )) in
+                            let chunklength = ((String.length chunk) - metaindex) in
+                            (* fugly way to find the end of the 1st dict *)
+                            Unix32.write fd !fileindex chunk
+                              metaindex 
+                              chunklength;
+                            fileindex := Int64.add !fileindex  (Int64.of_int chunklength);
+                            ();
+                          ) c.client_file.file_metadata_chunks;
+                        end;
+                        
+                      end
+                    else begin
+                          (* now ask for the next metadata piece, if any *)
+                      let module B = Bencode in
+                      let nextpiece = (Int64.succ c.client_file.file_metadata_piece) in begin
+                        lprintf_file_nl (as_file file) "asking for the next piece %Ld" nextpiece;
                         send_extended_piece_request c nextpiece file;
-                    |_ ->
-                      lprintf_file_nl (as_file file) "unmatched extended subtype" ;
+                      end;
+                    end;
+                |_ ->
+                  lprintf_file_nl (as_file file) "unmatched extended subtype" ;
             end;
 
             
