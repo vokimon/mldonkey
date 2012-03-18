@@ -272,7 +272,7 @@ let set_trackers file file_trackers =
           file.file_trackers <-  t :: file.file_trackers)
   file_trackers
 
-let new_file file_id t torrent_diskname file_temp file_state user group =
+let new_file  ?(metadata = false) file_id t torrent_diskname file_temp file_state user group =
   try
     Hashtbl.find files_by_uid file_id
   with Not_found ->
@@ -304,7 +304,7 @@ let new_file file_id t torrent_diskname file_temp file_state user group =
           file_last_dht_announce = 0;
           file_metadata_size = 0L;
           file_metadata_piece = 0L;
-          file_metadata_downloading = true;
+          file_metadata_downloading = metadata;
           file_metadata_chunks = Array.make 20 "";
           file_private = t.torrent_private;
         } and file_impl =  {
@@ -358,10 +358,10 @@ let new_file file_id t torrent_diskname file_temp file_state user group =
       must_share_file file;
       file
 
-let new_download file_id t torrent_diskname user =
+let new_download ?(metadata = false)  file_id t torrent_diskname user =
   let file_temp = Filename.concat !!DO.temp_directory
       (Printf.sprintf "BT-%s" (Sha1.to_string file_id)) in
-  new_file file_id t torrent_diskname file_temp FileDownloading user
+  new_file ~metadata:metadata file_id t torrent_diskname file_temp FileDownloading user
 
 let ft_by_num = Hashtbl.create 13
 let ft_counter = ref 0

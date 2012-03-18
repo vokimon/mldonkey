@@ -63,6 +63,8 @@ open BTGlobals
 open BTComplexOptions
 open BTChooser
 open BTStats
+
+
 open TcpMessages
 open Bencode
 open Str
@@ -100,6 +102,54 @@ include struct
 (* open modules locally *)
 open BTUdpTracker
 open UdpSocket
+
+
+(* some stupid temporary copypasta because i couldnt figure out how to import from btinteractive *)
+(* let hack_op_file_cancel file = *)
+(*   CommonSwarming.remove_swarmer file.file_swarmer; *)
+(*   file.file_swarmer <- None; *)
+(*    (\* forward declarations turned out difficult. wtf?*\) *)
+(*   (\* file_stop file;*\) *)
+(*   remove_file file; *)
+(*   (\*disconnect_clients file;*\) *)
+(*   (\*remove_all_clients file;*\) *)
+(*   if Sys.file_exists file.file_torrent_diskname then Sys.remove file.file_torrent_diskname *)
+
+let load_torrent_string s user group =
+  if !verbose then lprintf_nl "load_torrent_string";
+  let file_id, torrent = BTTorrent.decode_torrent s in
+
+  (* Save the torrent, because we later want to put
+     it in the seeded directory. *)
+  let torrent_diskname = CommonFile.concat_file downloads_directory (torrent.torrent_name ^ ".torrent") in
+  if Sys.file_exists torrent_diskname then
+    begin
+      if !verbose then lprintf_nl "load_torrent_string: %s already exists, ignoring" torrent_diskname;
+      raise (Torrent_already_exists torrent.torrent_name)
+    end;
+  File.from_string torrent_diskname s;
+
+  if !verbose then
+    lprintf_nl "Starting torrent download with diskname: %s"
+        torrent_diskname;
+  let file = new_download file_id torrent torrent_diskname user group in
+  (* talk_to_tracker file true; TODO stupid fwd declaration issue. OTOH bep9 torrents arent tracker based anyway*)
+  CommonInteractive.start_download (file_find (file_num file));
+  file
+
+let load_torrent_file filename user group =
+  if !verbose then
+    lprintf_nl "load_torrent_file %s" filename;
+  let s = File.to_string filename in
+  (* Delete the torrent if it is in the downloads dir. because it gets saved
+     again under the torrent name and we don't want to clutter up this dir. .*)
+  if Sys.file_exists filename
+      && (Filename.dirname filename) = downloads_directory then
+    Sys.remove filename;
+  ignore (load_torrent_string s user group)
+(* end copypasta *)
+
+
 
 let string_of_event = function
   | READ_DONE -> "READ_DONE"
@@ -1282,8 +1332,11 @@ and client_to_client c sock msg =
 
     | Extended (extmsg, payload) ->
       
-      (* extmsg: 0 handshake, N other message previously declared in handshake*)
-      begin
+      (* extmsg: 0 handshake, N other message previously declared in handshake.
+         atm ignore extended messages if were not currently in metadata state.
+         TODO when were not in metadata state we should be friendly and answer metadata requests
+      *)
+      if file.file_metadata_downloading then begin
         (* since we got at least one extended handshake from the peer, it should be okay to
            send a handshake back now. we need to send it so the remote client knows how
            to send us messages back.
@@ -1315,7 +1368,7 @@ and client_to_client c sock msg =
 
                         | _ -> () ;
                     ) list;
-                    (* okay so now we now what to ask for, so ask for metadata now
+                    (* okay so now we know what to ask for, so ask for metadata now
                        since metadata can be larger than 16k which is the limit, the transfer needs to be chunked, so
                        it is not really right to make the query here. but its a start.
                        also im just asking for piece 0.
@@ -1327,7 +1380,7 @@ and client_to_client c sock msg =
                     send_extended_piece_request c c.client_file.file_metadata_piece file;
                 |_ -> () ;
             end;
-          | 0x01 -> (* ut_metadata is 1 because we asked it to be 1 in the handshake (try 2 for a while)
+          | 0x01 -> (* ut_metadata is 1 because we asked it to be 1 in the handshake
                        the msg_type is probably
                        1 for data,
                        but could be 0 for request(unlikely since we didnt advertise we had the meta)
@@ -1350,7 +1403,7 @@ and client_to_client c sock msg =
                               msgtype := n;
                           | "piece", Int n ->
                             lprintf_file_nl (as_file file) "piece %Ld" n;
-                            c.client_file.file_metadata_piece <- n;
+                            file.file_metadata_piece <- n;
                           | "total_size", Int n ->
                             lprintf_file_nl (as_file file) "total_size %Ld" n; (* should always be the same as received in the initial handshake i suppose *)
                           |_ -> () ;
@@ -1359,41 +1412,63 @@ and client_to_client c sock msg =
               end;
               match !msgtype with
                   1L ->
-                    let last_piece_index = (Int64.div c.client_file.file_metadata_size 16384L) in
+                    let last_piece_index = (Int64.div file.file_metadata_size 16384L) in
                     lprintf_file_nl (as_file file) "handling metadata piece %Ld of %Ld"
-                      c.client_file.file_metadata_piece
+                      file.file_metadata_piece
                       last_piece_index;
                         (* store the metadata piece in memory *)
-                    c.client_file.file_metadata_chunks.(1 + (Int64.to_int c.client_file.file_metadata_piece)) <- payload;
+                    file.file_metadata_chunks.(1 + (Int64.to_int file.file_metadata_piece)) <- payload;
                         (* possibly write metadata to disk *)
-                    if c.client_file.file_metadata_piece >=
-                      (Int64.div c.client_file.file_metadata_size 16384L) then begin
+                    if file.file_metadata_piece >=
+                      (Int64.div file.file_metadata_size 16384L) then begin
                         lprintf_file_nl (as_file file) "this was the last piece ";
                             (* here we should simply delete the current download, and wait for mld to pick up the new torrent file *)
                             (* the entire payload is currently in the array, TODO *)
-                        let fd = Unix32.create_rw  (Printf.sprintf "/tmp/BT-%s.torrent"
-                                                      (Sha1.to_string c.client_file.file_id))  in
+                        let newtorrentfile = (Printf.sprintf "/tmp/BT-%s.torrent"
+                                                      (Sha1.to_string file.file_id)) in
+                        let fd = Unix32.create_rw  newtorrentfile  in
                         let fileindex = ref 0L in
                         begin
-                          c.client_file.file_metadata_chunks.(0) <- "eed4:info";
-                          c.client_file.file_metadata_chunks.(2 + Int64.to_int last_piece_index) <- "eee";
-                          Array.iteri (fun index chunk ->
-                            let metaindex = (2 + (Str.search_forward  (Str.regexp_string "ee") chunk 0 )) in
-                            let chunklength = ((String.length chunk) - metaindex) in
-                            (* fugly way to find the end of the 1st dict *)
-                            Unix32.write fd !fileindex chunk
-                              metaindex 
-                              chunklength;
-                            fileindex := Int64.add !fileindex  (Int64.of_int chunklength);
-                            ();
-                          ) c.client_file.file_metadata_chunks;
+                          (* the ee is so we can use the same method to find the
+                             start of the payload for the real payloads as well as the synthetic ones
+                             *)
+                          file.file_metadata_chunks.(0) <- "eed4:info";
+                          file.file_metadata_chunks.(2 + Int64.to_int last_piece_index) <- "eee";
+                          try
+                            Array.iteri (fun index chunk ->
+                            (* regexp ee is a fugly way to find the end of the 1st dict before the real payload *)
+                              let metaindex = (2 + (Str.search_forward  (Str.regexp_string "ee") chunk 0 )) in
+                              let chunklength = ((String.length chunk) - metaindex) in
+                              Unix32.write fd !fileindex chunk
+                                metaindex 
+                                chunklength;
+                              fileindex := Int64.add !fileindex  (Int64.of_int chunklength);
+                              ();
+                            ) file.file_metadata_chunks;
+                          with e -> begin
+                            (* TODO ignoring errors for now, the array isnt really set up right anyway yet *)
+                            lprintf_file_nl (as_file file) "Error %s saving metadata"
+                              (Printexc2.to_string e)
+                          end;
+                          (* Yay, now the new torrent is on disk! amazing! However, now we need to kill the dummy torrent
+                             and restart it with the fresh real torrent *)
+
+                          (* it seems we need to use the dynamic interface... *)
+                          lprintf_file_nl (as_file file) "cancelling metadata download ";
+                          let owner = file.file_file.impl_file_owner in
+                          let group = file.file_file.impl_file_group in begin
+                            CommonInteractive.file_cancel (as_file file) owner ;
+                            (* hack_op_file_cancel c.client_file;   *)
+                            lprintf_file_nl (as_file file) "starting download from metadata torrent %s" newtorrentfile  ;
+                            load_torrent_file newtorrentfile owner group;
+                          end;
                         end;
                         
                       end
                     else begin
                           (* now ask for the next metadata piece, if any *)
                       let module B = Bencode in
-                      let nextpiece = (Int64.succ c.client_file.file_metadata_piece) in begin
+                      let nextpiece = (Int64.succ file.file_metadata_piece) in begin
                         lprintf_file_nl (as_file file) "asking for the next piece %Ld" nextpiece;
                         send_extended_piece_request c nextpiece file;
                       end;

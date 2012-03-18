@@ -322,7 +322,8 @@ let op_file_print file o =
   if !bt_dht <> None then
     emit (_s"Last DHT announce") ~desc:(_s"Last time this torrent was announced in DHT")
       (string_of_date file.file_last_dht_announce);
-
+  emit (_s"Metadata downloading")     (if file.file_metadata_downloading then _s "yes" else _s "no");
+  
   let rec print_first_tracker l =
     match l with
       | [] -> ()
@@ -1266,9 +1267,9 @@ let commands =
             torrent_name_utf8 = hashstr;
             torrent_comment = "";
             torrent_pieces = Array.of_list [];  
-            torrent_piece_size = 100000L;  
+            torrent_piece_size = 1L;  
             torrent_files = []; 
-            torrent_length = 1000000000L;
+            torrent_length = 1L;
             torrent_created_by = ""; 
             torrent_creation_date = 1000000L;
             torrent_modified_by = ""; 
@@ -1284,8 +1285,8 @@ let commands =
             torrent_announce_list = [];
           }  in
         let hash = (Sha1.of_hexa  hashstr) in
-        let file = new_download hash torrent "" o.conn_user.ui_user o.conn_user.ui_user.user_default_group in
-        file.file_metadata_downloading <- true;
+        new_download ~metadata:true hash torrent "" o.conn_user.ui_user o.conn_user.ui_user.user_default_group;
+        ();
 
       end;
       _s ""
