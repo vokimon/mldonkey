@@ -1254,14 +1254,8 @@ let commands =
      ),  "<url|file> :\t\t\tstart BT download";
 
     "startbthash", "Network/Bittorrent", Arg_one (fun hashstr o ->
-      
       begin
-
-        let torrent = (* BTTorrent.make_torrent "" "" "" false *)
-
-(* BTTorrent.decode_torrent "" *)
-
-          {
+        let torrent =          {
             torrent_name = hashstr;
             torrent_filename = hashstr;
             torrent_name_utf8 = hashstr;
@@ -1275,23 +1269,54 @@ let commands =
             torrent_modified_by = ""; 
             torrent_encoding = ""; 
             torrent_private = false; 
-             (*
-               torrent_nodes = file_nodes;
-             *)
             torrent_announce = "";
-            (* (match file_trackers with *)
-            (*   | h::q -> h *)
-            (*   | [] -> ""); *)
             torrent_announce_list = [];
-          }  in
+        }  in
         let hash = (Sha1.of_hexa  hashstr) in
         new_download ~metadata:true hash torrent "" o.conn_user.ui_user o.conn_user.ui_user.user_default_group;
         ();
 
       end;
       _s ""
-    ),  "<hash> :\t\t\tstart BT download DEBUG will go away";
+    ),  "<hash> :\t\t\tstart BT download using a hash DEBUG will go away";
 
+    "startbtmagnet", "Network/Bittorrent", Arg_one (fun magneturl o ->
+      begin
+        let exn_catch f x = try `Ok (f x) with exn -> `Exn exn in
+        match exn_catch parse_magnet_url magneturl with
+          | `Exn _ -> "Not a magnet url", false
+          | `Ok magnet ->
+            if !verbose then
+              lprintf_nl "Got magnet url %S" magneturl;
+            List.iter (fun(v) -> lprintf_nl "magnet %s" (string_of_uid v)) magnet#uids ;
+            match List2.filter_map (function BTUrl btih -> Some btih | _ -> None) magnet#uids with
+              | [] -> "No btih found in magnet url", false;
+              | btih::_ ->
+                lprintf_nl "Got btih %S" (Sha1.to_string btih);
+                let hashstr = (Sha1.to_string btih) in 
+                let torrent =          {
+                  torrent_name = hashstr; (*magnet#name*)
+                  torrent_filename = hashstr;
+                  torrent_name_utf8 = hashstr;
+                  torrent_comment = "";
+                  torrent_pieces = Array.of_list [];  
+                  torrent_piece_size = 1L;  
+                  torrent_files = []; 
+                  torrent_length = 1L;
+                  torrent_created_by = ""; 
+                  torrent_creation_date = 1000000L;
+                  torrent_modified_by = ""; 
+                  torrent_encoding = ""; 
+                  torrent_private = false; 
+                  torrent_announce = "";
+                  torrent_announce_list = [];
+                }  in
+                new_download ~metadata:true btih torrent "" o.conn_user.ui_user o.conn_user.ui_user.user_default_group;
+                magnet#name, true; 
+      end;
+      _s ""
+    ),  "<magneturl> :\t\t\tstart BT download using a bt magnet url DEBUG will go away";
+    
 
     
     "stop_all_bt", "Network/Bittorrent", Arg_none (fun o ->

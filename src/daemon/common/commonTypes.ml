@@ -117,7 +117,8 @@ let uid_of_string s =
   | "md5" ->  Md5 (Md5.of_string rem)
   | "sig2dat" -> Md5Ext (Md5Ext.of_base32 rem)
   | "bt" | "bittorrent" | "btih" -> 
-      BTUrl (Sha1.of_string rem)
+      BTUrl (Sha1.of_hexa rem) (* TODO i changed from of_string to of_hexa, because its more common, but both are legal I think.
+                               that is, both base32 and base64 are supposed to work*)
   | "filetp" -> FileTP (Md4.of_string rem)
   | _ -> raise (Illegal_urn (s ^ " at " ^ sign ^ " is not known"))
 
