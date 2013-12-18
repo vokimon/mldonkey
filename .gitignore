@@ -1,5 +1,5 @@
 build
-*.cm[aiox]
+*.cm*
 *.annot
 *.o
 *.byte
